@@ -65,7 +65,7 @@ export class Preloader extends Scene
 
             // --- Música de fondo ---
             this.load.audio('menu_theme', 'audio/music/menu_theme.wav');
-            this.load.audio('gameplay_theme', 'audio/music/gameplay_theme.wav');
+            this.load.audio('gameplay_theme', 'audio/music/Neon Block Rush.mp3');
 
             // --- Efectos de sonido ---
             this.load.audio('button_click', 'audio/sfx/button_click.wav');

@@ -1,0 +1,104 @@
+html,
+body,
+#app,
+#game-container,
+#game-container canvas {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    color: rgba(255, 255, 255, 0.87);
+    background-color: #000000;
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    cursor: default;
+}
+
+#game-container canvas {
+    display: block;
+    cursor: default;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+#app {
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #000000;
+}
+
+/* --- Aviso para dispositivos móviles --- */
+
+.mobile-warning {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+    background-color: rgba(0, 0, 0, 0.92);
+}
+
+.mobile-warning[hidden] {
+    display: none;
+}
+
+.mobile-warning__panel {
+    width: 100%;
+    max-width: 460px;
+    padding: 32px;
+    border: 2px solid #c8ff00;
+    background-color: #0a0a0a;
+    color: #ffffff;
+    text-align: center;
+    line-height: 1.9;
+    box-shadow: 0 0 24px rgba(200, 255, 0, 0.25);
+}
+
+.mobile-warning__panel h1 {
+    margin: 0 0 20px;
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 18px;
+    color: #c8ff00;
+    line-height: 1.6;
+}
+
+.mobile-warning__panel p {
+    margin: 0 0 16px;
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 10px;
+    line-height: 1.9;
+}
+
+.mobile-warning__note {
+    color: #888888;
+}
+
+.mobile-warning__panel button {
+    margin-top: 8px;
+    padding: 14px 20px;
+    border: 1px solid #ffffff;
+    background-color: transparent;
+    color: #ffffff;
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.mobile-warning__panel button:hover,
+.mobile-warning__panel button:focus-visible {
+    border-color: #c8ff00;
+    color: #c8ff00;
+    outline: none;
+}

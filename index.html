@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+    <meta name="theme-color" content="#000000">
+    <title>Pong - Retro Arcade Edition</title>
+</head>
+
+<body>
+    <div id="app">
+        <div id="game-container"></div>
+    </div>
+
+    <div id="mobile-warning" class="mobile-warning" hidden>
+        <div class="mobile-warning__panel" role="alertdialog" aria-labelledby="mobile-warning-title"
+            aria-describedby="mobile-warning-text">
+            <h1 id="mobile-warning-title">KEYBOARD REQUIRED</h1>
+            <p id="mobile-warning-text">
+                This game is not designed for mobile devices yet. You need a physical keyboard with
+                arrow keys (or WASD) to play.
+            </p>
+            <p class="mobile-warning__note">
+                Open this page on a desktop or laptop computer for the best experience.
+            </p>
+            <button id="mobile-warning-continue" type="button">CONTINUE ANYWAY</button>
+        </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

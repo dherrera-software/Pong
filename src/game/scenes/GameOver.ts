@@ -2,7 +2,16 @@ import { Scene } from 'phaser';
 import { playMusic, playSfx } from '../audio/sound';
 import { AI_CONFIG, COLORS, DIFFICULTIES, RETRO_FONT } from '../config/gameplay';
 import type { Difficulty, GameMode, GameResult, GameSettings } from '../types';
-import { bindFullscreenKey, colorToHex, createNeonButton, drawNeonGrid } from '../ui/neon';
+import { bindFullscreenKey, colorToHex, drawNeonGrid } from '../ui/neon';
+
+interface GameOverMenuItem
+{
+    box: Phaser.GameObjects.Rectangle;
+    label: Phaser.GameObjects.Text;
+    arrow: Phaser.GameObjects.Text;
+    baseColor: string;
+    action: () => void;
+}
 
 export class GameOver extends Scene
 {
@@ -13,6 +22,8 @@ export class GameOver extends Scene
     private winner: 1 | 2 = 1;
     private suddenDeath = false;
     private starting = false;
+    private selectedIndex = 0;
+    private menuItems: GameOverMenuItem[] = [];
 
     constructor ()
     {
@@ -30,6 +41,8 @@ export class GameOver extends Scene
         this.winner = data.winner === 2 ? 2 : 1;
         this.suddenDeath = data.suddenDeath ?? false;
         this.starting = false;
+        this.selectedIndex = 0;
+        this.menuItems = [];
     }
 
     create (): void
@@ -104,9 +117,10 @@ export class GameOver extends Scene
         }).setOrigin(0.5);
 
         this.createActions();
+        this.refreshSelection();
         this.bindKeys();
 
-        this.add.text(400, 572, 'ENTER: REMATCH   ESC: MENU   F: FULLSCREEN', {
+        this.add.text(400, 572, 'UP/DOWN OR W/S: SELECT   ENTER: CONFIRM   ESC: MENU   F: FULLSCREEN', {
             fontFamily: RETRO_FONT,
             fontSize: 8,
             color: colorToHex(COLORS.muted)
@@ -115,29 +129,89 @@ export class GameOver extends Scene
 
     private createActions (): void
     {
-        createNeonButton(this, {
-            x: 400,
-            y: 446,
-            label: 'REMATCH',
-            accent: COLORS.player1,
-            fontSize: 14,
-            onClick: () => this.startRematch()
-        });
+        const definitions = [
+            { label: 'REMATCH', baseColor: '#ffffff', action: () => this.startRematch() },
+            { label: 'MAIN MENU', baseColor: '#ffffff', action: () => this.goToMenu() }
+        ];
 
-        createNeonButton(this, {
-            x: 400,
-            y: 512,
-            label: 'MAIN MENU',
-            accent: COLORS.player2,
-            fontSize: 14,
-            onClick: () => this.goToMenu()
+        const buttonWidth = 360;
+        const buttonHeight = 54;
+        const positions = [446, 512];
+
+        this.menuItems = definitions.map((definition, index) => {
+            const box = this.add.rectangle(0, 0, buttonWidth, buttonHeight, 0x000000, 0);
+            box.setStrokeStyle(1, 0xffffff, 0.3);
+
+            const label = this.add.text(0, 0, definition.label, {
+                fontFamily: RETRO_FONT,
+                fontSize: 14,
+                color: definition.baseColor
+            }).setOrigin(0.5);
+
+            const arrow = this.add.text(-buttonWidth / 2 - 24, 0, '\u25B6', {
+                fontFamily: RETRO_FONT,
+                fontSize: 18,
+                color: '#c8ff00'
+            }).setOrigin(0.5).setVisible(false);
+
+            this.add.container(400, positions[index], [ box, label, arrow ]);
+
+            return {
+                box,
+                label,
+                arrow,
+                baseColor: definition.baseColor,
+                action: definition.action
+            };
         });
+    }
+
+    private refreshSelection (): void
+    {
+        this.menuItems.forEach((item, index) => {
+            const selected = index === this.selectedIndex;
+
+            item.box.setStrokeStyle(selected ? 2 : 1, selected ? COLORS.accent : 0xffffff, selected ? 1 : 0.3);
+            item.box.setFillStyle(0x000000, selected ? 0.35 : 0);
+            item.label.setColor(selected ? '#c8ff00' : item.baseColor);
+            item.arrow.setVisible(selected);
+        });
+    }
+
+    private navigate (direction: number): void
+    {
+        if (this.starting || this.menuItems.length === 0)
+        {
+            return;
+        }
+
+        playSfx(this, 'button_hover');
+        this.selectedIndex = (this.selectedIndex + direction + this.menuItems.length) % this.menuItems.length;
+        this.refreshSelection();
+    }
+
+    private confirmSelection (): void
+    {
+        if (this.starting || this.menuItems.length === 0)
+        {
+            return;
+        }
+
+        this.menuItems[this.selectedIndex].action();
     }
 
     private bindKeys (): void
     {
         bindFullscreenKey(this);
-        this.input.keyboard?.on('keydown-ENTER', () => this.startRematch());
+
+        this.input.keyboard?.on('keydown-UP', () => this.navigate(-1));
+        this.input.keyboard?.on('keydown-W', () => this.navigate(-1));
+        this.input.keyboard?.on('keydown-DOWN', () => this.navigate(1));
+        this.input.keyboard?.on('keydown-S', () => this.navigate(1));
+
+        this.input.keyboard?.on('keydown-ENTER', () => this.confirmSelection());
+        this.input.keyboard?.on('keydown-SPACE', () => this.confirmSelection());
+
         this.input.keyboard?.on('keydown-R', () => this.startRematch());
         this.input.keyboard?.on('keydown-ESC', () => this.goToMenu());
     }

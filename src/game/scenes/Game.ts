@@ -1,5 +1,6 @@
 import { Math as PhaserMath, Scene } from 'phaser';
 import { PaddleAI } from '../ai/PaddleAI';
+import { TezukaZoneManager } from '../logic/tezuka-zone';
 import { playMusic, playSfx } from '../audio/sound';
 import {
     AI_CONFIG,
@@ -40,6 +41,8 @@ export class Game extends Scene
     private ball!: Phaser.Physics.Arcade.Image;
     private cpuAI?: PaddleAI;
     private keys!: ReturnType<typeof createPlayerControls>;
+    private tezukaZone!: TezukaZoneManager;
+        private zoneAura!: Phaser.GameObjects.Arc;
 
     private hud!: HudElements;
 
@@ -134,8 +137,25 @@ export class Game extends Scene
         this.rightPaddle = this.court.rightPaddle;
         this.ball = this.court.ball;
 
+        this.zoneAura = this.add.circle(this.leftPaddle.x + 50, this.leftPaddle.y, 120, 0x0000ff, 0.15);
+        this.zoneAura.setStrokeStyle(4, 0x00ffff, 0.8);
+        this.zoneAura.setVisible(false);
+        this.zoneAura.setDepth(-1); // Detrás de la paleta
+
+        // Animación para que el aura pulse
+        this.tweens.add({
+            targets: this.zoneAura,
+            scaleX: 1.1,
+            scaleY: 1.1,
+            alpha: 0.3,
+            duration: 800,
+            yoyo: true,
+            repeat: -1
+        });
+
         this.hud = createHud(this, this.mode, this.difficulty);
         this.keys = createPlayerControls(this);
+        this.tezukaZone = new TezukaZoneManager();
         playMusic(this, 'gameplay_theme');
 
         this.pauseMenu = createPauseMenu(this, {
@@ -164,6 +184,8 @@ export class Game extends Scene
 
         this.input.keyboard!.addKey('P').on('down', () => this.togglePause());
         this.input.keyboard!.addKey('ESC').on('down', () => this.togglePause());
+
+        this.input.keyboard!.addKey('T').on('down', () => this.toggleTezukaAbility());
 
         // Navegación del menú de pausa (solo teclado)
         this.input.keyboard!.on('keydown-UP', (event: KeyboardEvent) => this.movePauseSelection(-1, event));
@@ -224,6 +246,15 @@ export class Game extends Scene
             updatePlayerPaddle(this.rightPaddle, this.keys.UP.isDown, this.keys.DOWN.isDown);
         }
 
+        // Update paddle visuals for Tezuka Zone feedback
+        this.updatePaddleVisuals();
+
+        // Apply Tezuka effects if active
+        if (!this.isGameOver)
+        {
+            this.updateTezukaEffects();
+        }
+
         this.updateWalls();
         this.checkForGoal();
 
@@ -259,6 +290,69 @@ export class Game extends Scene
         {
             this.pauseMenu.hide();
             this.physics.world.resume();
+        }
+    }
+
+    private toggleTezukaAbility (): void
+    {
+        if (this.isGameOver || this.isCountdown || this.isPaused) return;
+
+        // Ahora se llama toggleAbility
+        this.tezukaZone.toggleAbility(1);
+        this.updatePaddleVisuals();
+    }
+
+            private updatePaddleVisuals (): void
+    {
+        this.tezukaZone.updatePaddleVisual(this.leftPaddle, 1);
+        this.tezukaZone.updatePaddleVisual(this.rightPaddle, 2);
+
+        const isZoneActive = this.tezukaZone.isTezukaZoneActive(1);
+        const isPhantomActive = this.tezukaZone.isTezukaPhantomActive(1);
+        const isEnabled = this.tezukaZone.isEnabled(1); // Asegúrate de tener esta función
+
+        // Aura Visual
+        if (isZoneActive) {
+            this.zoneAura.setVisible(true);
+            this.zoneAura.y = this.leftPaddle.y;
+            this.zoneAura.setFillStyle(0x0000ff, 0.15);
+            this.zoneAura.setStrokeStyle(4, 0x00ffff, 0.8);
+        } 
+        else if (isPhantomActive) {
+            this.zoneAura.setVisible(true);
+            this.zoneAura.y = this.leftPaddle.y;
+            this.zoneAura.setFillStyle(0xff0000, 0.15);
+            this.zoneAura.setStrokeStyle(4, 0xff0000, 0.8);
+        } 
+        else if (isEnabled) {
+            // Si está encendida pero esperando el golpe, mostramos un aura amarilla sutil
+            this.zoneAura.setVisible(true);
+            this.zoneAura.y = this.leftPaddle.y;
+            this.zoneAura.setFillStyle(0xffff00, 0.05);
+            this.zoneAura.setStrokeStyle(2, 0xffff00, 0.3);
+        } 
+        else {
+            this.zoneAura.setVisible(false);
+        }
+    }
+
+        private updateTezukaEffects (): void
+    {
+        const body = this.ball.body as Phaser.Physics.Arcade.Body;
+
+        // Si la pelota viaja hacia la derecha (hacia la CPU)
+        if (body.velocity.x > 0) {
+            // Si hicimos un golpe con rebote, la Phantom empuja la pelota hacia las esquinas
+            if (this.tezukaZone.isTezukaPhantomActive(1)) {
+                this.tezukaZone.applyPhantomEffect(this.ball, this.currentBallSpeed);
+            }
+        }
+        // Si la pelota viaja hacia la izquierda (hacia nosotros)
+        else if (body.velocity.x < 0) {
+            // Si hicimos un golpe limpio, la Zone atrae la pelota hacia el centro
+            if (this.tezukaZone.isTezukaZoneActive(1)) {
+                this.tezukaZone.applyZoneEffect(this.ball, this.currentBallSpeed);
+            }
         }
     }
 
@@ -301,16 +395,19 @@ export class Game extends Scene
         this.scene.start('MainMenu');
     }
 
-    private startCountdown (direction: 1 | -1 = 1): void
+            private startCountdown (direction: 1 | -1 = 1): void
     {
         this.isCountdown = true;
         this.isServing = true;
         this.nextServeDirection = direction;
         this.stopBall();
         this.resetPaddles();
+        
+        this.tezukaZone.resetRound(); // <--- CAMBIAR A resetRound
+        this.updatePaddleVisuals(); 
+
         this.ball.setPosition(GAME_WIDTH / 2, GAME_HEIGHT / 2);
         this.ball.setVisible(true);
-
         // Se fija en el primer update con el tiempo real del reloj (evita desfases en create)
         this.countdownStart = -1;
 
@@ -407,20 +504,21 @@ export class Game extends Scene
         }
     }
 
-    private updateWalls (): void
+            private updateWalls (): void
     {
         const body = this.ball.body as Phaser.Physics.Arcade.Body;
         const velocityY = body.velocity.y;
+        
+        // Calculamos el lado basado en la posición X
+        const currentSide: 1 | 2 = this.ball.x < GAME_WIDTH / 2 ? 1 : 2;
 
         if (this.ball.y - BALL_RADIUS <= 0 && velocityY < 0)
         {
             this.ball.setY(BALL_RADIUS);
             body.setVelocityY(Math.abs(velocityY));
             this.registerBounce();
-            playSfx(this, 'wall_bounce');
-            emitSparks(this.sparkEmitter, this.ball.x, this.ball.y, COLORS.ball, 5);
-            this.cameras.main.shake(30, 0.001);
-            return;
+            this.tezukaZone.registerWallHit(currentSide); // <-- Enviar lado
+            // ... resto
         }
 
         if (this.ball.y + BALL_RADIUS >= GAME_HEIGHT && velocityY > 0)
@@ -428,9 +526,8 @@ export class Game extends Scene
             this.ball.setY(GAME_HEIGHT - BALL_RADIUS);
             body.setVelocityY(-Math.abs(velocityY));
             this.registerBounce();
-            playSfx(this, 'wall_bounce');
-            emitSparks(this.sparkEmitter, this.ball.x, this.ball.y, COLORS.ball, 5);
-            this.cameras.main.shake(30, 0.001);
+            this.tezukaZone.registerWallHit(currentSide); // <-- Enviar lado
+            // ... resto
         }
     }
 
@@ -451,15 +548,23 @@ export class Game extends Scene
         }
     }
 
-    private handlePaddleHit (paddle: Phaser.Physics.Arcade.Image, direction: 1 | -1): void
+        private handlePaddleHit (paddle: Phaser.Physics.Arcade.Image, direction: 1 | -1): void
     {
-        if (this.isGameOver)
-        {
-            return;
-        }
+        if (this.isGameOver) return;
 
+        const currentTime = this.time.now;
+        const player = direction === 1 ? 1 : 2;
+        
+        const isCornerHit = this.tezukaZone.isCornerHit(paddle, this.ball.x, this.ball.y);
+        
+        // El manager ahora decide si es Zone o Phantom internamente
+         this.tezukaZone.handlePaddleHit(player, isCornerHit, currentTime); 
+
+        // ... (tu código de rebote, ángulos y partículas se mantiene exactamente igual)
+
+        // 2. Física normal del rebote de Pong
         const body = this.ball.body as Phaser.Physics.Arcade.Body;
-        // El ángulo de rebote depende del punto de impacto en la paleta.
+        
         const relativeImpact = PhaserMath.Clamp(
             (this.ball.y - paddle.y) / (PADDLE_HEIGHT / 2),
             -1,
@@ -476,13 +581,16 @@ export class Game extends Scene
         this.registerBounce();
         playSfx(this, 'paddle_hit');
 
-        // Chispas del color del jugador que golpeó
+        // 3. Efectos visuales del rebote
         const sparkColor = direction === 1 ? COLORS.player1 : COLORS.player2;
         emitSparks(this.sparkEmitter, this.ball.x, this.ball.y, sparkColor, 10);
 
-        // Sacudida de cámara proporcional al impacto
         const shakeIntensity = Math.abs(relativeImpact) > 0.7 ? 70 : 45;
         this.cameras.main.shake(shakeIntensity, 0.0015);
+
+        // 4. Le avisamos a Tezuka Zone que este jugador acaba de devolver la pelota
+        // (Esto quita el color azul/rojo de la paleta del rival y resetea las paredes)
+        this.tezukaZone.onOpponentHit(player);
     }
 
     private registerBounce (): void

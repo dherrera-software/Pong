@@ -1,5 +1,6 @@
 import { playSfx } from '../audio/sound';
 import { COLORS, RETRO_FONT } from '../config/gameplay';
+import { isTouchDevice } from './touch-controls';
 
 export interface PauseMenuCallbacks
 {
@@ -60,6 +61,21 @@ export function createPauseMenu (
     const items: PauseMenuItem[] = definitions.map((definition, index) => {
         const box = scene.add.rectangle(0, 0, BUTTON_WIDTH, BUTTON_HEIGHT, 0x000000, 0);
         box.setStrokeStyle(1, 0xffffff, 0.3);
+
+        if (!isTouchDevice()) {
+            box.setInteractive({ useHandCursor: true });
+            box.on('pointerover', () => {
+                if (selectedIndex !== index) {
+                    playSfx(scene, 'button_hover');
+                    selectedIndex = index;
+                    refresh();
+                }
+            });
+            box.on('pointerdown', () => {
+                selectedIndex = index;
+                confirm();
+            });
+        }
 
         const label = scene.add.text(0, 0, definition.label, {
             fontFamily: RETRO_FONT,

@@ -7,8 +7,52 @@ Rediseño de UX para móviles del juego Pong sin tocar la lógica de física, co
 
 ## Estado actual
 - **TypeScript:** ✅ Compila sin errores (`npx tsc --noEmit`)
-- **Build de producción:** ✅ Exitoso (`npx vite build --config vite/config.prod.mjs`)
-- **Playwright:** ⚠️ No se pudo ejecutar automáticamente (limitación de PowerShell para mantener servidor web en segundo plano)
+- **Build de producción:** ✅ Exitoso (`pnpm build-nolog`)
+- **Playwright:** ✅ 4 tests pasando al 100% (PC escritorio sin botones táctiles, móvil vertical, móvil horizontal con navegación + in-game + pausa + rotación dinámica, tablet horizontal)
+
+## Corrección de Bugs Recientes (UX Móvil / Tablets)
+
+### 1. Fix: Flechas in-game desaparecían al pulsar CONTINUE en el menú de pausa
+- **Problema reportado:** Al pulsar pausa durante la partida, los controles cambiaban a la sección de navegación (D-Pad + acciones). Sin embargo, al confirmar la opción "CONTINUE", las flechas in-game no volvían a aparecer y el juego quedaba injugable.
+- **Causa raíz:** En `src/game/scenes/Game.ts`, `onContinue` llamaba a `this.hidePauseMenu()`, el cual únicamente ejecutaba `this.isPaused = false`, `pauseMenu.hide()` y `physics.world.resume()`, sin invocar `hideNavigationControls()` ni `showTouchControls()`.
+- **Solución:**
+  - `onContinue` ahora invoca explícitamente `this.resumeGame()`.
+  - En `this.resumeGame()`, se llama a `hideNavigationControls()` y `showTouchControls()`, garantizando la reaparición instantánea de las flechas táctiles de juego.
+  - `hidePauseMenu()` también se blindó llamando a `hideNavigationControls()` y `showTouchControls()`.
+  - `togglePause()` ahora canaliza siempre a través de `pauseGame()` y `resumeGame()`.
+
+### 2. Fix: Pantalla completa y prevención de descuadre hacia abajo al girar de vertical a horizontal
+- **Problema reportado:** Al rotar el dispositivo de vertical a horizontal, el contenido de la página se descuadraba hacia abajo debido a la barra de direcciones del navegador móvil y la falta de pantalla completa automática.
+- **Causa raíz:**
+  - `public/style.css` tenía reglas en la media query horizontal que sobreescribían `#app` con `justify-content: flex-start; align-items: flex-start;` y `#game-container` con `100vh` rígido (que en móviles incluye la barra del navegador).
+  - La transición de vertical a horizontal no solicitaba pantalla completa ni reseteaba el scroll del viewport (`window.scrollTo(0, 0)`).
+- **Solución:**
+  - En `src/game/ui/touch-controls.ts`, se implementó `triggerFullscreen()` con soporte seguro para `requestFullscreen`, `webkitRequestFullscreen`, reseteo de `window.scrollTo(0, 0)` y enlace al siguiente toque del usuario (`armFullscreenOnNextTouch()`) si el navegador requiere activación explícita.
+  - En `applyOrientationLock()`, al pasar de `isLocked = true` a `isLocked = false`, se invoca inmediatamente `triggerFullscreen()`, se resetea el scroll a 0 y se despachan eventos de `resize` retardados para sincronizar el Scale Manager de Phaser.
+  - En `public/style.css`, se aseguró que `html, body, #app` estén siempre anclados con `position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh; overflow: hidden; overscroll-behavior: none; touch-action: none;` y centrado flex absoluto (`justify-content: center; align-items: center;`).
+  - En `index.html`, se actualizó el meta viewport a `width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover`.
+
+### 3. Fix: Exclusión estricta de controles táctiles en PC (escritorio / laptop)
+- **Problema reportado:** En la versión de PC con teclado y ratón aparecían los botones táctiles sobrepuestos (D-Pad, botones de acción y flechas in-game), cuando estos solo deben existir en móviles y tablets.
+- **Causa raíz:** PCs con Windows y laptops/monitores con pantalla táctil reportan `navigator.maxTouchPoints > 0` y `'ontouchstart' in window`, lo que provocaba que la heurística anterior los clasificara erróneamente como dispositivos móviles táctiles.
+- **Solución:**
+  1. En `src/game/ui/touch-controls.ts`, `isTouchDevice()` ahora descarta explícitamente PCs de escritorio / laptops con ratón/trackpad (`pointer: fine` + `hover: hover`), reconociendo únicamente dispositivos móviles y tablets nativos (Android, iOS, iPadOS) o emulación explícita.
+  2. Se agregó `syncDeviceBodyClass()` que aplica la clase `is-desktop-device` en PC y `is-mobile-device` en móviles/tablets.
+  3. En `public/style.css`, se blindó con doble capa de protección: `body.is-desktop-device` y `@media (hover: hover) and (pointer: fine) and (not (pointer: coarse))` aplican `display: none !important; visibility: hidden !important; pointer-events: none !important;` sobre todos los overlays táctiles.
+  4. En `MainMenu.ts`, `GameOver.ts` y `pause-menu.ts`, se habilitó la interacción con puntero/ratón (`setInteractive`) exclusivamente para dispositivos PC (`!isTouchDevice()`), permitiendo usar tanto teclado como ratón sin interferencias táctiles.
+  5. Se añadió la suite automatizada `tests/desktop-no-touch-controls.spec.ts` validando la ausencia total de botones táctiles en PC.
+
+### 4. Fix: Centrado simétrico exacto del Canvas y Pantalla Completa móvil garantizada
+- **Problema reportado:** El juego se veía descuadrado (desplazado hacia abajo, recortando el borde inferior y textos como "PRESS ENTER TO START"). Además, en móviles la barra de URL del navegador tapaba el contenido y no entraba en pantalla completa.
+- **Causa raíz:**
+  1. `#app` y `#game-container` tenían `display: flex; justify-content: center; align-items: center;`. Al mismo tiempo, Phaser (`Scale.CENTER_BOTH`) calculaba márgenes en línea (`margin-top` y `margin-left`). En CSS, el contenedor flex ya centraba el canvas, y Phaser le añadía margen encima, desplazando el canvas un 50% extra hacia abajo y a la derecha ("descuadre").
+  2. Los navegadores móviles bloquean `requestFullscreen()` fuera de eventos con gesto de usuario directo. Además, en PC no debe forzarse pantalla completa automáticamente.
+- **Solución:**
+  1. En `public/style.css`, se añadió `#game-container canvas { margin: 0 !important; }`. Con esto, Flexbox centra el canvas con precisión matemática absoluta en ambos ejes (márgenes simétricos comprobados: top 100 / bottom 100 en 800x800, left 160 / right 160 en 1280x720, left 162 / right 162 en 844x390).
+  2. En `src/game/ui/touch-controls.ts`, `triggerFullscreen()` se restringió estrictamente a `isTouchDevice()` (NUNCA se activa en PC).
+  3. Se añadió `ensureMobileFullscreen()`, que se ejecuta al primer toque táctil de cualquier botón móvil (D-pad, flechas in-game, pausa, canvas), aprovechando el evento táctil de usuario confiable para que el navegador móvil active pantalla completa sin bloqueo.
+  4. Se añadió el botón flotante `#fullscreen-btn-mobile` retro en la esquina superior izquierda (solo visible en móviles y tablets) para alternar pantalla completa manualmente en cualquier momento.
+  5. Se agregaron meta tags PWA para pantalla completa (`apple-mobile-web-app-capable`, `mobile-web-app-capable`).
 
 ## Cambios implementados
 

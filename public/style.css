@@ -11,9 +11,22 @@ body,
     -webkit-tap-highlight-color: transparent;
 }
 
+html,
 body {
     margin: 0;
     padding: 0;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    min-height: -webkit-fill-available;
+    overflow: hidden;
+    position: fixed;
+    inset: 0;
+    touch-action: none;
+    overscroll-behavior: none;
+}
+
+body {
     color: rgba(255, 255, 255, 0.87);
     background-color: #000000;
     font-family: 'Press Start 2P', 'Courier New', monospace;
@@ -25,11 +38,15 @@ body {
     cursor: default;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
+    margin: 0 !important;
 }
 
 #app {
+    position: fixed;
+    inset: 0;
     width: 100%;
-    height: 100vh;
+    height: 100%;
+    height: 100dvh;
     overflow: hidden;
     display: flex;
     justify-content: center;
@@ -163,7 +180,13 @@ body {
 }
 
 :root {
-    --black-zone-w: max(100px, calc((100vw - (100vh * 4 / 3)) / 2));
+    --black-zone-w: max(100px, calc((100vw - (100dvh * 4 / 3)) / 2));
+}
+
+@supports not (height: 100dvh) {
+    :root {
+        --black-zone-w: max(100px, calc((100vw - (100vh * 4 / 3)) / 2));
+    }
 }
 
 /* ==========================================================================
@@ -302,6 +325,53 @@ body {
 }
 
 .pause-btn-mobile.hidden {
+    display: none !important;
+}
+
+/* --- Botón de pantalla completa flotante (móvil) – retro --- */
+.fullscreen-btn-mobile {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 9999;
+    width: 48px;
+    height: 48px;
+    border: 3px solid rgba(255, 255, 255, 0.55);
+    border-radius: 8px;
+    background: rgba(30, 30, 36, 0.8);
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    transition: background 0.1s ease, transform 0.08s ease;
+    touch-action: none;
+    pointer-events: auto;
+}
+
+.fullscreen-btn-mobile.is-visible {
+    display: flex;
+}
+
+.fullscreen-btn-mobile svg {
+    width: 22px;
+    height: 22px;
+}
+
+.fullscreen-btn-mobile:hover,
+.fullscreen-btn-mobile:focus-visible {
+    background: rgba(60, 60, 70, 0.85);
+    border-color: #ffffff;
+    color: #ffffff;
+    outline: none;
+}
+
+.fullscreen-btn-mobile:active {
+    transform: scale(0.9);
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.fullscreen-btn-mobile.hidden {
     display: none !important;
 }
 
@@ -567,50 +637,68 @@ body {
         width: 18px;
         height: 18px;
     }
+
+    .fullscreen-btn-mobile {
+        top: 8px;
+        left: 8px;
+        width: 40px;
+        height: 40px;
+        border-width: 2px;
+        border-radius: 6px;
+    }
+
+    .fullscreen-btn-mobile svg {
+        width: 18px;
+        height: 18px;
+    }
 }
 
-/* --- Responsive: asegurar que el canvas no cause scroll horizontal y ocupe el 100% en móvil y tablet --- */
-@media (max-width: 844px) and (orientation: landscape) {
+/* --- Responsive: asegurar que el juego esté perfectamente centrado y contenido --- */
+@media (orientation: landscape) {
     #app {
-        justify-content: flex-start;
-        align-items: flex-start;
-    }
-
-    #game-container {
-        width: 100vw;
-        height: 100vh;
-        max-width: none;
-        max-height: none;
-        padding: 0;
-        margin: 0;
-        display: block;
-    }
-
-    #game-container canvas {
+        position: fixed;
+        inset: 0;
         width: 100%;
         height: 100%;
-        max-width: none;
-        max-height: none;
-        object-fit: contain;
+        height: 100dvh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+    }
+
+    #game-container {
+        width: 100%;
+        height: 100%;
+        max-width: 100%;
+        max-height: 100%;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
     }
 }
 
-@media (max-width: 599px) and (orientation: portrait) {
+@media (orientation: portrait) {
+    #app {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        height: 100dvh;
+        overflow: hidden;
+    }
+
     #game-container {
-        width: 100vw;
-        height: 100vh;
+        width: 100%;
+        height: 100%;
         display: flex;
         justify-content: center;
         align-items: center;
         padding: 0;
-    }
-
-    #game-container canvas {
-        max-width: 100%;
-        max-height: 100%;
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
+        overflow: hidden;
     }
 }
 
@@ -634,8 +722,38 @@ body {
     z-index: 9999;
 }
 
+.fullscreen-btn-mobile {
+    z-index: 9999;
+}
+
 /* El overlay de orientación debe estar por encima de TODO
    (canvas, zonas táctiles, botón de pausa y cualquier menú de Phaser). */
 .orientation-lock {
     z-index: 10000;
+}
+
+/* ==========================================================================
+   Controles táctiles – EXCLUSIVOS PARA MÓVILES Y TABLETS
+   En PC (escritorio / laptop con teclado y ratón), NUNCA deben mostrarse los botones sobrepuestos.
+   ========================================================================== */
+body.is-desktop-device .touch-zone,
+body.is-desktop-device .touch-nav-overlay,
+body.is-desktop-device .pause-btn-mobile,
+body.is-desktop-device .fullscreen-btn-mobile,
+body.is-desktop-device .orientation-lock {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+@media (hover: hover) and (pointer: fine) and (not (pointer: coarse)) {
+    .touch-zone,
+    .touch-nav-overlay,
+    .pause-btn-mobile,
+    .fullscreen-btn-mobile,
+    .orientation-lock {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
 }

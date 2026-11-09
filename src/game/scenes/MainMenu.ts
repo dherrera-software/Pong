@@ -4,7 +4,7 @@ import { getAudioSettings, playMusic, playSfx, setMusicVolume, setSfxVolume } fr
 import { AI_CONFIG, DIFFICULTIES, GAME_HEIGHT, GAME_VERSION, GAME_WIDTH, RETRO_FONT } from '../config/gameplay';
 import type { Difficulty, GameSettings } from '../types';
 import { bindFullscreenKey } from '../ui/neon';
-import { hideNavigationControls, showNavigationControls } from '../ui/touch-controls';
+import { hideNavigationControls, showNavigationControls, isTouchDevice } from '../ui/touch-controls';
 
 type MenuState = 'main' | 'difficulty' | 'settings' | 'credits';
 
@@ -188,6 +188,22 @@ export class MainMenu extends Scene {
                 color: '#ffffff'
             }).setOrigin(0.5);
 
+            if (!isTouchDevice()) {
+                text.setInteractive({ useHandCursor: true });
+                text.on('pointerover', () => {
+                    if (this.selectedIndex !== index) {
+                        playSfx(this, 'button_hover');
+                        this.selectedIndex = index;
+                        this.updateCursor();
+                    }
+                });
+                text.on('pointerdown', () => {
+                    this.selectedIndex = index;
+                    this.updateCursor();
+                    this.handleSelect();
+                });
+            }
+
             this.menuItems.push(text);
             this.mainContainer.add(text);
         });
@@ -209,14 +225,30 @@ export class MainMenu extends Scene {
 
         this.difficultyItems = [];
 
-        diffOptions.forEach((opt) => {
+        diffOptions.forEach((opt, index) => {
             const isBack = opt === 'BACK';
             const label = isBack ? 'BACK' : AI_CONFIG[opt as Difficulty].label;
-            const text = this.add.text(GAME_WIDTH / 2, startY + this.difficultyItems.length * spacingY, label, {
+            const text = this.add.text(GAME_WIDTH / 2, startY + index * spacingY, label, {
                 fontFamily: RETRO_FONT,
                 fontSize: 18,
                 color: isBack ? '#888888' : '#ffffff'
             }).setOrigin(0.5);
+
+            if (!isTouchDevice()) {
+                text.setInteractive({ useHandCursor: true });
+                text.on('pointerover', () => {
+                    if (this.selectedIndex !== index) {
+                        playSfx(this, 'button_hover');
+                        this.selectedIndex = index;
+                        this.updateCursor();
+                    }
+                });
+                text.on('pointerdown', () => {
+                    this.selectedIndex = index;
+                    this.updateCursor();
+                    this.handleSelect();
+                });
+            }
 
             this.difficultyItems.push(text);
             this.difficultyContainer.add(text);

@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: /capture-mobile-orientation\.spec\.ts/,
+  testMatch: /(capture-mobile-orientation|desktop-no-touch-controls)\.spec\.ts/,
   reporter: [['list']],
   use: {
     baseURL: 'http://localhost:8081',

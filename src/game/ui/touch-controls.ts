@@ -34,25 +34,11 @@ export interface NavigationCallbacks {
 
 // ─── Detección de dispositivo táctil (móvil / tablet) ───
 
-let dynamicTouchDetected = false;
-
-if (typeof window !== 'undefined') {
-    window.addEventListener(
-        'touchstart',
-        () => {
-            dynamicTouchDetected = true;
-        },
-        { once: true, passive: true }
-    );
-}
-
 /**
- * Detecta si el dispositivo actual es táctil (móvil o tablet).
- * Reconoce coarse pointer, maxTouchPoints (iPads, tablets Android), ontouchstart,
- * userAgent de móviles/tablets y el parámetro ?touch para pruebas.
+ * Detecta si el dispositivo actual es un móvil o tablet.
+ * En PC (Windows, Mac, Linux de escritorio con teclado/ratón), devuelve estrictamente FALSE.
  */
 export function isTouchDevice(): boolean {
-    if (dynamicTouchDetected) return true;
     if (typeof window === 'undefined') return false;
 
     // Permitir forzar modo táctil en desarrollo/testing con ?touch o #touch
@@ -60,27 +46,73 @@ export function isTouchDevice(): boolean {
         return true;
     }
 
-    // Heurística 1: pointer coarse (CSS Media Queries nivel 4)
-    if (window.matchMedia?.('(pointer: coarse)').matches) return true;
+    // 1. Client Hints (Chromium en móviles devuelve mobile: true)
+    const uaData = (navigator as any).userAgentData;
+    if (uaData && typeof uaData.mobile === 'boolean' && uaData.mobile) {
+        return true;
+    }
 
-    // Heurística 2: maxTouchPoints > 0 (iPads modernas con iPadOS, tablets Android, smartphones)
-    if (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) return true;
-
-    // Heurística 3: ontouchstart disponible en window
-    if ('ontouchstart' in window) return true;
-
-    // Heurística 4: userAgent con palabras clave de móviles o tablets
     const ua = navigator.userAgent || '';
-    const mobileTabletRegex = /Android|iPhone|iPad|iPod|Windows Phone|IEMobile|Opera Mini|Mobile|Tablet|Silk|Kindle/i;
-    if (mobileTabletRegex.test(ua)) return true;
 
+    // 2. Dispositivos móviles y tablets nativos identificados por User-Agent
+    const isMobileUA = /Android|iPhone|iPad|iPod|Windows Phone|IEMobile|Opera Mini|Mobile|Tablet|Silk|Kindle/i.test(ua);
+    if (isMobileUA) return true;
+
+    // 3. iPad en iPadOS 13+ (se identifica como Macintosh con pantalla multitáctil)
+    const isIPad = /Macintosh/i.test(ua) && navigator.maxTouchPoints && navigator.maxTouchPoints > 2;
+    if (isIPad) return true;
+
+    // 4. Si el puntero primario es táctil (coarse) y NO tiene ratón fino (fine),
+    // es un entorno táctil / emulador móvil (como Playwright con isMobile: true o DevTools responsive)
+    const isPureTouchPointer = window.matchMedia?.('(pointer: coarse)').matches && !window.matchMedia?.('(pointer: fine)').matches;
+    if (isPureTouchPointer) return true;
+
+    // En cualquier otro caso (PC de escritorio o laptop con ratón/trackpad):
+    // Es PC, por tanto NO debe mostrar controles táctiles sobrepuestos
     return false;
 }
 
-/** ¿La pantalla es pequeña o compacta? */
-function isSmallScreen(): boolean {
-    return Math.min(window.innerWidth, window.innerHeight) <= 900;
+/**
+ * Sincroniza la clase del body ('is-desktop-device' o 'is-mobile-device')
+ * para garantizar a nivel de CSS que nunca se muestren botones sobrepuestos en PC.
+ */
+export function syncDeviceBodyClass(): void {
+    if (typeof document === 'undefined') return;
+    if (isTouchDevice()) {
+        document.body.classList.add('is-mobile-device');
+        document.body.classList.remove('is-desktop-device');
+    } else {
+        document.body.classList.add('is-desktop-device');
+        document.body.classList.remove('is-mobile-device');
+    }
 }
+
+if (typeof window !== 'undefined') {
+    syncDeviceBodyClass();
+    window.addEventListener('resize', syncDeviceBodyClass);
+
+    // En móviles, el primer toque del usuario solicita pantalla completa de inmediato
+    window.addEventListener(
+        'touchstart',
+        () => {
+            if (isTouchDevice()) {
+                ensureMobileFullscreen();
+            }
+        },
+        { passive: true }
+    );
+
+    document.addEventListener('fullscreenchange', () => {
+        window.scrollTo(0, 0);
+        window.dispatchEvent(new Event('resize'));
+        setTimeout(() => {
+            window.scrollTo(0, 0);
+            window.dispatchEvent(new Event('resize'));
+        }, 120);
+    });
+}
+
+
 
 // ─── Estado interno ───
 
@@ -91,6 +123,7 @@ let isLocked = false;
 let orientationInitialized = false;
 let inGameTouchInitialized = false;
 let pauseInitialized = false;
+let fullscreenInitialized = false;
 let navInitialized = false;
 
 // Estado de entrada táctil para paletas P1 y P2
@@ -103,15 +136,147 @@ function el(id: string): HTMLElement | null {
     return document.getElementById(id);
 }
 
-// ─── 1. Bloqueo de orientación (GLOBAL) ───
+// ─── 1. Bloqueo de orientación y pantalla completa (GLOBAL) ───
+
+let touchArmedForFullscreen = false;
+
+function armFullscreenOnNextTouch(): void {
+    if (touchArmedForFullscreen || typeof window === 'undefined') return;
+    touchArmedForFullscreen = true;
+
+    const handler = () => {
+        window.removeEventListener('touchstart', handler);
+        window.removeEventListener('touchend', handler);
+        window.removeEventListener('pointerdown', handler);
+        window.removeEventListener('click', handler);
+        touchArmedForFullscreen = false;
+
+        window.scrollTo(0, 0);
+        const doc = document as any;
+        const docEl = document.documentElement as any;
+        if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
+            const req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen;
+            if (req) {
+                req.call(docEl).catch(() => {});
+            }
+        }
+    };
+
+    window.addEventListener('touchstart', handler, { passive: true });
+    window.addEventListener('touchend', handler, { passive: true });
+    window.addEventListener('pointerdown', handler, { passive: true });
+    window.addEventListener('click', handler, { passive: true });
+}
+
+/**
+ * Solicita pantalla completa EXCLUSIVAMENTE en dispositivos móviles y tablets.
+ * En PC (escritorio / laptop con teclado y ratón), NUNCA solicita pantalla completa.
+ */
+export function ensureMobileFullscreen(): void {
+    if (!isTouchDevice()) return; // NUNCA en PC!
+
+    const doc = document as any;
+    const isFullscreen = !!(
+        doc.fullscreenElement ||
+        doc.webkitFullscreenElement ||
+        doc.mozFullScreenElement ||
+        doc.msFullscreenElement
+    );
+
+    if (!isFullscreen) {
+        triggerFullscreen();
+    }
+}
+
+/**
+ * Alterna pantalla completa (usado por el botón táctil de pantalla completa en móvil).
+ */
+export function toggleFullscreen(): void {
+    if (typeof document === 'undefined') return;
+
+    window.scrollTo(0, 0);
+
+    const doc = document as any;
+    const isFullscreen = !!(
+        doc.fullscreenElement ||
+        doc.webkitFullscreenElement ||
+        doc.mozFullScreenElement ||
+        doc.msFullscreenElement
+    );
+
+    if (isFullscreen) {
+        const exit = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
+        if (exit) exit.call(doc).catch(() => {});
+    } else {
+        triggerFullscreen();
+    }
+}
+
+/**
+ * Solicita pantalla completa de forma segura al girar a horizontal o interactuar.
+ * Resetea el scroll para evitar desplazamientos verticales ("descuadre hacia abajo").
+ */
+export function triggerFullscreen(): void {
+    if (typeof document === 'undefined') return;
+    if (!isTouchDevice()) return; // NUNCA forzar pantalla completa en PC!
+
+    window.scrollTo(0, 0);
+
+    const doc = document as any;
+    const docEl = document.documentElement as any;
+
+    const isFullscreen = !!(
+        doc.fullscreenElement ||
+        doc.webkitFullscreenElement ||
+        doc.mozFullScreenElement ||
+        doc.msFullscreenElement
+    );
+
+    if (!isFullscreen) {
+        const req =
+            docEl.requestFullscreen ||
+            docEl.webkitRequestFullscreen ||
+            docEl.webkitRequestFullScreen ||
+            docEl.mozRequestFullScreen ||
+            docEl.msRequestFullscreen;
+
+        if (req) {
+            try {
+                const promise = req.call(docEl);
+                if (promise && typeof promise.catch === 'function') {
+                    promise.catch(() => {
+                        armFullscreenOnNextTouch();
+                    });
+                }
+            } catch {
+                armFullscreenOnNextTouch();
+            }
+        }
+    }
+
+    try {
+        if (screen.orientation && (screen.orientation as any).lock) {
+            (screen.orientation as any).lock('landscape').catch(() => {});
+        }
+    } catch {
+        // Ignorar si el navegador no permite bloqueo programático
+    }
+}
 
 function shouldLockOrientation(): boolean {
     const isPortrait = window.innerHeight > window.innerWidth;
     if (!isPortrait) return false;
-    return isTouchDevice() || isSmallScreen();
+    return isTouchDevice();
 }
 
 function applyOrientationLock(): void {
+    if (!isTouchDevice()) {
+        const lockEl = el('orientation-lock');
+        if (lockEl) lockEl.classList.add('hidden');
+        isLocked = false;
+        return;
+    }
+
     const lockEl = el('orientation-lock');
     const shouldLock = shouldLockOrientation();
 
@@ -127,6 +292,18 @@ function applyOrientationLock(): void {
 
         if (isLocked) {
             isLocked = false;
+            // ¡Transición de vertical a horizontal!
+            // Aplicar pantalla completa y resetear cualquier desplazamiento
+            triggerFullscreen();
+            window.scrollTo(0, 0);
+            window.setTimeout(() => {
+                window.scrollTo(0, 0);
+                window.dispatchEvent(new Event('resize'));
+            }, 80);
+            window.setTimeout(() => {
+                window.scrollTo(0, 0);
+                window.dispatchEvent(new Event('resize'));
+            }, 250);
             gameCallbacks?.onResume();
         }
     }
@@ -136,9 +313,24 @@ function applyOrientationLock(): void {
  * Inicializa el bloqueo de orientación vertical.
  */
 export function initOrientationLock(cb?: TouchControlCallbacks): void {
+    syncDeviceBodyClass();
+
+    if (!isTouchDevice()) {
+        const lockEl = el('orientation-lock');
+        if (lockEl) lockEl.classList.add('hidden');
+        return;
+    }
+
     if (cb) {
         gameCallbacks = cb;
         if (isLocked) cb.onPause();
+    }
+
+    const lockEl = el('orientation-lock');
+    if (lockEl && !(lockEl as any).__fsAttached) {
+        (lockEl as any).__fsAttached = true;
+        lockEl.addEventListener('touchstart', () => triggerFullscreen(), { passive: true });
+        lockEl.addEventListener('click', () => triggerFullscreen());
     }
 
     if (orientationInitialized) return;
@@ -198,6 +390,7 @@ function setupPlayerTouchZone(
         const start = (e: Event) => {
             e.preventDefault();
             e.stopPropagation();
+            ensureMobileFullscreen();
             applyState(isUp, !isUp);
         };
 
@@ -221,12 +414,16 @@ function setupPlayerTouchZone(
 }
 
 export function initTouchControls(cb: TouchControlCallbacks): void {
+    syncDeviceBodyClass();
     gameCallbacks = cb;
+
+    if (!isTouchDevice()) {
+        hideTouchControls();
+        return;
+    }
 
     if (inGameTouchInitialized) return;
     inGameTouchInitialized = true;
-
-    if (!isTouchDevice()) return;
 
     setupPlayerTouchZone(el('touch-zone-left'), 1, 'game-btn-p1-up', 'game-btn-p1-down');
     setupPlayerTouchZone(el('touch-zone-right'), 2, 'game-btn-p2-up', 'game-btn-p2-down');
@@ -235,16 +432,21 @@ export function initTouchControls(cb: TouchControlCallbacks): void {
 // ─── 3. Botón de pausa flotante (móvil) ───
 
 export function initPauseButton(cb: TouchControlCallbacks): void {
+    syncDeviceBodyClass();
     gameCallbacks = cb;
+
+    const pauseBtn = el('pause-btn-mobile');
+    if (!isTouchDevice() || !pauseBtn) {
+        if (pauseBtn) pauseBtn.classList.remove('is-visible');
+        return;
+    }
 
     if (pauseInitialized) return;
     pauseInitialized = true;
 
-    const pauseBtn = el('pause-btn-mobile');
-    if (!isTouchDevice() || !pauseBtn) return;
-
     pauseBtn.addEventListener('click', (e: MouseEvent) => {
         e.preventDefault();
+        ensureMobileFullscreen();
         cb.onPause();
     });
 
@@ -252,7 +454,38 @@ export function initPauseButton(cb: TouchControlCallbacks): void {
         'touchstart',
         (e: TouchEvent) => {
             e.preventDefault();
+            ensureMobileFullscreen();
             cb.onPause();
+        },
+        { passive: false }
+    );
+}
+
+// ─── 3b. Botón de pantalla completa flotante (móvil) ───
+
+export function initFullscreenButton(): void {
+    syncDeviceBodyClass();
+    const fsBtn = el('fullscreen-btn-mobile');
+    if (!isTouchDevice() || !fsBtn) {
+        if (fsBtn) fsBtn.classList.remove('is-visible');
+        return;
+    }
+
+    if (fullscreenInitialized) return;
+    fullscreenInitialized = true;
+
+    fsBtn.addEventListener('click', (e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleFullscreen();
+    });
+
+    fsBtn.addEventListener(
+        'touchstart',
+        (e: TouchEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleFullscreen();
         },
         { passive: false }
     );
@@ -269,6 +502,7 @@ function bindNavButton(
 
     const trigger = (e: Event) => {
         e.preventDefault();
+        ensureMobileFullscreen();
         btn.classList.add('is-active');
         onTrigger();
         window.setTimeout(() => {
@@ -297,19 +531,25 @@ export function setNavigationCallbacks(cb: NavigationCallbacks | null): void {
 }
 
 export function showNavigationControls(cb?: NavigationCallbacks): void {
+    syncDeviceBodyClass();
     if (cb) {
         navCallbacks = cb;
     }
 
-    initNavigationControls();
+    if (!isTouchDevice()) {
+        hideNavigationControls();
+        return;
+    }
 
-    if (!isTouchDevice()) return;
+    initNavigationControls();
+    initFullscreenButton();
 
     const navOverlay = el('touch-nav-overlay');
     if (navOverlay) {
         navOverlay.classList.remove('hidden');
         navOverlay.classList.add('is-visible');
     }
+    el('fullscreen-btn-mobile')?.classList.add('is-visible');
 }
 
 export function hideNavigationControls(): void {
@@ -322,11 +562,17 @@ export function hideNavigationControls(): void {
 // ─── 5. Control de visibilidad de zonas en-game ───
 
 export function showTouchControls(): void {
-    if (!isTouchDevice()) return;
+    syncDeviceBodyClass();
+    if (!isTouchDevice()) {
+        hideTouchControls();
+        return;
+    }
 
+    initFullscreenButton();
     el('touch-zone-left')?.classList.add('is-visible');
     el('touch-zone-right')?.classList.add('is-visible');
     el('pause-btn-mobile')?.classList.add('is-visible');
+    el('fullscreen-btn-mobile')?.classList.add('is-visible');
 }
 
 export function hideTouchControls(): void {

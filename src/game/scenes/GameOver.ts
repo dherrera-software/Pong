@@ -3,7 +3,7 @@ import { playMusic, playSfx } from '../audio/sound';
 import { AI_CONFIG, COLORS, DIFFICULTIES, RETRO_FONT } from '../config/gameplay';
 import type { Difficulty, GameMode, GameResult, GameSettings } from '../types';
 import { bindFullscreenKey, colorToHex, drawNeonGrid } from '../ui/neon';
-import { hideNavigationControls, showNavigationControls } from '../ui/touch-controls';
+import { hideNavigationControls, showNavigationControls, isTouchDevice } from '../ui/touch-controls';
 
 interface GameOverMenuItem
 {
@@ -156,6 +156,22 @@ export class GameOver extends Scene
         this.menuItems = definitions.map((definition, index) => {
             const box = this.add.rectangle(0, 0, buttonWidth, buttonHeight, 0x000000, 0);
             box.setStrokeStyle(1, 0xffffff, 0.3);
+
+            if (!isTouchDevice()) {
+                box.setInteractive({ useHandCursor: true });
+                box.on('pointerover', () => {
+                    if (this.selectedIndex !== index) {
+                        playSfx(this, 'button_hover');
+                        this.selectedIndex = index;
+                        this.refreshSelection();
+                    }
+                });
+                box.on('pointerdown', () => {
+                    this.selectedIndex = index;
+                    this.refreshSelection();
+                    this.confirmSelection();
+                });
+            }
 
             const label = this.add.text(0, 0, definition.label, {
                 fontFamily: RETRO_FONT,

@@ -1,9 +1,17 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, devices } from '@playwright/test';
 
 test.use({ screenshot: 'only-on-failure' });
 
+const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1';
+const IPAD_UA = 'Mozilla/5.0 (iPad; CPU OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1';
+
 test.describe('MÓVIL VERTICAL — bloqueo de orientación', () => {
-  test.use({ isMobile: true, hasTouch: true, viewport: { width: 390, height: 844 } });
+  test.use({
+    userAgent: IPHONE_UA,
+    isMobile: true,
+    hasTouch: true,
+    viewport: { width: 390, height: 844 }
+  });
 
   test('390x844: overlay "Gira tu dispositivo" visible e infranqueable', async ({ page }) => {
     await page.goto('http://localhost:8081');
@@ -25,7 +33,12 @@ test.describe('MÓVIL VERTICAL — bloqueo de orientación', () => {
 });
 
 test.describe('MÓVIL HORIZONTAL — controles de navegación e In-Game', () => {
-  test.use({ isMobile: true, hasTouch: true, viewport: { width: 844, height: 390 } });
+  test.use({
+    userAgent: IPHONE_UA,
+    isMobile: true,
+    hasTouch: true,
+    viewport: { width: 844, height: 390 }
+  });
 
   test('844x390: sección de navegación en menú con todas las flechas transparentes', async ({ page }) => {
     await page.goto('http://localhost:8081');
@@ -151,12 +164,63 @@ test.describe('MÓVIL HORIZONTAL — controles de navegación e In-Game', () => 
     await btnBack.click();
     await page.waitForTimeout(500);
     await expect(touchLeft).toBeVisible();
+    await expect(touchRight).toBeVisible();
     await expect(navOverlay).not.toBeVisible();
+
+    // 7. Pausar nuevamente y reanudar seleccionando "CONTINUE" con el botón OK
+    await pauseBtn.click();
+    await page.waitForTimeout(500);
+    await expect(navOverlay).toBeVisible();
+    await expect(touchLeft).not.toBeVisible();
+
+    // En el menú de pausa la primera opción seleccionada es CONTINUE. Pulsar OK.
+    await btnOk.click();
+    await page.waitForTimeout(500);
+
+    // ¡CRÍTICO! Al dar a CONTINUE, las flechas in-game DEBEN reaparecer y la navegación ocultarse
+    await expect(touchLeft).toBeVisible();
+    await expect(touchRight).toBeVisible();
+    await expect(p1Up).toBeVisible();
+    await expect(p1Down).toBeVisible();
+    await expect(p2Up).toBeVisible();
+    await expect(p2Down).toBeVisible();
+    await expect(navOverlay).not.toBeVisible();
+
+    await page.screenshot({ path: 'test-screenshots/mobile-resume-continue-ok.png', fullPage: true });
+    console.log('OK: las flechas in-game reaparecen correctamente al pulsar CONTINUE en el menú de pausa');
+
+    // 8. Probar rotación dinámica: de horizontal a vertical y vuelta a horizontal
+    await page.evaluate(() => {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+    await page.waitForTimeout(300);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(400);
+    const lockOverlay = page.locator('#orientation-lock');
+    await expect(lockOverlay).toBeVisible();
+
+    // Volver a horizontal (844x390): debe quitar el overlay, resetear scroll y mantener el juego centrado
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.waitForTimeout(400);
+    await expect(lockOverlay).not.toBeVisible();
+
+    const scrollY = await page.evaluate(() => window.scrollY || document.documentElement.scrollTop || 0);
+    expect(scrollY).toBe(0);
+
+    await page.screenshot({ path: 'test-screenshots/mobile-rotated-to-landscape.png', fullPage: true });
+    console.log('OK: rotación a horizontal sin descuadre hacia abajo y pantalla restablecida');
   });
 });
 
 test.describe('TABLET HORIZONTAL (iPad 1024x768) — controles adaptados y sin scroll', () => {
-  test.use({ isMobile: true, hasTouch: true, viewport: { width: 1024, height: 768 } });
+  test.use({
+    userAgent: IPAD_UA,
+    isMobile: true,
+    hasTouch: true,
+    viewport: { width: 1024, height: 768 }
+  });
 
   test('1024x768: controles adaptados para tablet en horizontal sin scrollbars', async ({ page }) => {
     await page.goto('http://localhost:8081');

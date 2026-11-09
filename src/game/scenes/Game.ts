@@ -214,7 +214,7 @@ export class Game extends Scene
 
         this.pauseMenu = createPauseMenu(this, {
             onContinue: () => {
-                this.hidePauseMenu();
+                this.resumeGame();
             },
             onRestart: () => {
                 this.restartGame();
@@ -372,20 +372,13 @@ export class Game extends Scene
             return;
         }
 
-        this.isPaused = !this.isPaused;
-
         if (this.isPaused)
         {
-            this.pauseMenu.show();
-            this.physics.world.pause();
-            this.trailEmitter?.stop();
-            hideTouchControls();
+            this.resumeGame();
         }
         else
         {
-            this.pauseMenu.hide();
-            this.physics.world.resume();
-            showTouchControls();
+            this.pauseGame();
         }
     }
 
@@ -477,6 +470,8 @@ export class Game extends Scene
         this.isPaused = false;
         this.pauseMenu.hide();
         this.physics.world.resume();
+        hideNavigationControls();
+        showTouchControls();
     }
 
     private restartGame (): void

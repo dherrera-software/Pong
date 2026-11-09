@@ -4,6 +4,7 @@ import { getAudioSettings, playMusic, playSfx, setMusicVolume, setSfxVolume } fr
 import { AI_CONFIG, DIFFICULTIES, GAME_HEIGHT, GAME_VERSION, GAME_WIDTH, RETRO_FONT } from '../config/gameplay';
 import type { Difficulty, GameSettings } from '../types';
 import { bindFullscreenKey } from '../ui/neon';
+import { hideNavigationControls, showNavigationControls } from '../ui/touch-controls';
 
 type MenuState = 'main' | 'difficulty' | 'settings' | 'credits';
 
@@ -123,9 +124,33 @@ export class MainMenu extends Scene {
         // --- CRT scanline overlay ---
         this.drawCrtScanlines();
 
-        // --- Keyboard controls (navegación solo por teclado) ---
+        // --- Keyboard controls (navegación por teclado) ---
         bindFullscreenKey(this);
         this.bindKeyboard();
+
+        // --- Controles de navegación táctil para móvil y tablet ---
+        this.setupTouchNavigation();
+        this.events.once('shutdown', () => {
+            hideNavigationControls();
+        });
+    }
+
+    private setupTouchNavigation(): void {
+        showNavigationControls({
+            onNavigate: (direction) => {
+                if (direction === 'up') this.navigateMenu(-1);
+                else if (direction === 'down') this.navigateMenu(1);
+                else if (direction === 'left') this.adjustSetting(-1);
+                else if (direction === 'right') this.adjustSetting(1);
+            },
+            onSelect: () => this.handleSelect(),
+            onBack: () => {
+                if (this.menuState !== 'main') {
+                    playSfx(this, 'button_click');
+                    this.switchToMainMenu();
+                }
+            }
+        });
     }
 
     private bindKeyboard(): void {
@@ -508,6 +533,7 @@ export class MainMenu extends Scene {
         }
 
         this.starting = true;
+        hideNavigationControls();
         this.cameras.main.fadeOut(180, 0, 0, 0);
 
         this.time.delayedCall(190, () => {

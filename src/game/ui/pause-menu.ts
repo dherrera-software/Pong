@@ -29,9 +29,9 @@ interface PauseMenuItem
 }
 
 const BUTTON_WIDTH = 360;
-const BUTTON_HEIGHT = 54;
-const BUTTON_SPACING = 76;
-const FIRST_BUTTON_Y = 300;
+const BUTTON_HEIGHT = 50;
+const BUTTON_SPACING = 66;
+const FIRST_BUTTON_Y = 248;
 
 export function createPauseMenu (
     scene: Phaser.Scene,
@@ -41,12 +41,13 @@ export function createPauseMenu (
     const overlay = scene.add.rectangle(0, 0, 800, 600, 0x000000, 0.75);
     overlay.setOrigin(0);
 
-    const panel = scene.add.rectangle(400, 350, 520, 400, 0x000000, 0.9);
+    // Panel perfectamente centrado en pantalla (400, 300)
+    const panel = scene.add.rectangle(400, 300, 480, 360, 0x000000, 0.9);
     panel.setStrokeStyle(1, 0xffffff, 0.2);
 
-    const title = scene.add.text(400, 205, 'PAUSED', {
+    const title = scene.add.text(400, 175, 'PAUSED', {
         fontFamily: RETRO_FONT,
-        fontSize: 36,
+        fontSize: 32,
         color: '#ffffff'
     }).setOrigin(0.5);
 
@@ -84,7 +85,7 @@ export function createPauseMenu (
         };
     });
 
-    const hint = scene.add.text(400, 520, 'UP/DOWN OR W/S: SELECT   ENTER: CONFIRM   ESC: RESUME', {
+    const hint = scene.add.text(400, 445, 'UP/DOWN OR W/S: SELECT   ENTER: CONFIRM   ESC: RESUME', {
         fontFamily: RETRO_FONT,
         fontSize: 8,
         color: '#888888'

@@ -26,9 +26,19 @@ import type { Difficulty, GameMode, GameResult, GameSettings } from '../types';
 import { bindFullscreenKey, createGameTextures, drawNeonGrid } from '../ui/neon';
 import { createHud, type HudElements } from '../ui/hud';
 import { createPauseMenu, type PauseMenu } from '../ui/pause-menu';
-import { createPlayerControls, updatePlayerPaddle } from '../ui/player-controls';
+import { createPlayerControls, combineInputs, updatePlayerPaddle } from '../ui/player-controls';
 import { bindCollisions, createCourtObjects, type CourtObjects, resetPaddles } from '../logic/court';
 import { initParticlesSafely, emitSparks } from '../particles';
+import {
+    initOrientationLock,
+    initTouchControls,
+    initPauseButton,
+    showTouchControls,
+    hideTouchControls,
+    showNavigationControls,
+    hideNavigationControls,
+    clearOrientationCallbacks,
+} from '../ui/touch-controls';
 
 export class Game extends Scene
 {
@@ -62,7 +72,51 @@ export class Game extends Scene
     private countdownStart = 0;
     private nextServeDirection: 1 | -1 = 1;
     private currentSettings!: GameSettings;
+    private touchInput = {
+        p1: { up: false, down: false },
+        p2: { up: false, down: false },
+    };
     private pauseMenu!: PauseMenu;
+
+    // ── Métodos públicos expuestos para la capa táctil (touch-controls.ts) ──
+    public pauseGame (): void
+    {
+        if (this.isGameOver || this.isCountdown || this.isPaused) return;
+        this.isPaused = true;
+        this.pauseMenu.show();
+        this.physics.world.pause();
+        this.trailEmitter?.stop();
+        hideTouchControls();
+        showNavigationControls({
+            onNavigate: (dir) => {
+                if (dir === 'up') this.movePauseSelection(-1);
+                else if (dir === 'down') this.movePauseSelection(1);
+            },
+            onSelect: () => this.confirmPauseSelection(),
+            onBack: () => this.resumeGame()
+        });
+    }
+
+    public resumeGame (): void
+    {
+        if (!this.isPaused) return;
+        this.isPaused = false;
+        this.pauseMenu.hide();
+        this.physics.world.resume();
+        hideNavigationControls();
+        showTouchControls();
+    }
+
+    public setTouchInput (player: 1 | 2, up: boolean, down: boolean): void
+    {
+        if (player === 1) {
+            this.touchInput.p1.up = up;
+            this.touchInput.p1.down = down;
+        } else {
+            this.touchInput.p2.up = up;
+            this.touchInput.p2.down = down;
+        }
+    }
 
     // --- Partículas (opcionales, degradación elegante) ---
     private trailEmitter: any;
@@ -198,7 +252,34 @@ export class Game extends Scene
         this.resetPaddles();
         this.startCountdown(PhaserMath.Between(0, 1) === 0 ? -1 : 1);
 
+        // Inicializar controles táctiles (solo dispositivos táctiles)
+        const touchCb = {
+            onPause: () => this.pauseGame(),
+            onResume: () => this.resumeGame(),
+            onTouchInput: (player: 1 | 2, up: boolean, down: boolean) => {
+                this.setTouchInput(player, up, down);
+            },
+        };
+        initOrientationLock(touchCb);
+        initTouchControls(touchCb);
+        initPauseButton(touchCb);
+
+        // Asegurar que los controles de navegación estén ocultos y los de juego visibles
+        hideNavigationControls();
+        showTouchControls();
+
         console.log('[Game] create terminado');
+    }
+
+    /**
+     * Limpieza al salir de la escena (menú, game over o reinicio):
+     * desvincula callbacks globales y oculta los controles táctiles y de navegación.
+     */
+    shutdown (): void
+    {
+        clearOrientationCallbacks();
+        hideTouchControls();
+        hideNavigationControls();
     }
 
     update (_time: number, delta: number): void
@@ -235,15 +316,28 @@ export class Game extends Scene
 
         if (this.mode === 'cpu')
         {
-            const up = this.keys.UP.isDown || this.keys.W.isDown;
-            const down = this.keys.DOWN.isDown || this.keys.S.isDown;
-            updatePlayerPaddle(this.leftPaddle, up, down);
+            const p1 = combineInputs(
+                this.keys.UP.isDown || this.keys.W.isDown,
+                this.keys.DOWN.isDown || this.keys.S.isDown,
+                this.touchInput.p1
+            );
+            updatePlayerPaddle(this.leftPaddle, p1.up, p1.down);
             this.cpuAI?.update(delta, this.ball, this.currentBallSpeed);
         }
         else
         {
-            updatePlayerPaddle(this.leftPaddle, this.keys.W.isDown, this.keys.S.isDown);
-            updatePlayerPaddle(this.rightPaddle, this.keys.UP.isDown, this.keys.DOWN.isDown);
+            const p1 = combineInputs(
+                this.keys.W.isDown,
+                this.keys.S.isDown,
+                this.touchInput.p1
+            );
+            const p2 = combineInputs(
+                this.keys.UP.isDown,
+                this.keys.DOWN.isDown,
+                this.touchInput.p2
+            );
+            updatePlayerPaddle(this.leftPaddle, p1.up, p1.down);
+            updatePlayerPaddle(this.rightPaddle, p2.up, p2.down);
         }
 
         // Update paddle visuals for Tezuka Zone feedback
@@ -285,11 +379,13 @@ export class Game extends Scene
             this.pauseMenu.show();
             this.physics.world.pause();
             this.trailEmitter?.stop();
+            hideTouchControls();
         }
         else
         {
             this.pauseMenu.hide();
             this.physics.world.resume();
+            showTouchControls();
         }
     }
 
@@ -356,9 +452,9 @@ export class Game extends Scene
         }
     }
 
-    private movePauseSelection (direction: number, event: KeyboardEvent): void
+    private movePauseSelection (direction: number, event?: KeyboardEvent): void
     {
-        if (event.repeat)
+        if (event?.repeat)
         {
             return;
         }
@@ -366,9 +462,9 @@ export class Game extends Scene
         this.pauseMenu.moveSelection(direction);
     }
 
-    private confirmPauseSelection (event: KeyboardEvent): void
+    private confirmPauseSelection (event?: KeyboardEvent): void
     {
-        if (event.repeat)
+        if (event?.repeat)
         {
             return;
         }
@@ -386,12 +482,14 @@ export class Game extends Scene
     private restartGame (): void
     {
         this.hidePauseMenu();
+        hideTouchControls();
         this.scene.start('Game', this.currentSettings);
     }
 
     private goToMenu (): void
     {
         this.hidePauseMenu();
+        hideTouchControls();
         this.scene.start('MainMenu');
     }
 
@@ -723,6 +821,7 @@ export class Game extends Scene
             return;
         }
 
+        hideTouchControls();
         this.isGameOver = true;
         this.isServing = true;
         this.stopBall();

@@ -15,6 +15,104 @@
 <body>
     <div id="app">
         <div id="game-container"></div>
+
+        <!-- ===== OVERLAY BLOQUEO VERTICAL (móvil) ===== -->
+        <div id="orientation-lock" class="orientation-lock hidden" role="alertdialog" aria-modal="true" aria-labelledby="orientation-title">
+            <div class="orientation-lock__content">
+                <div class="orientation-lock__icon">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Teléfono -->
+                        <rect x="7" y="4" width="10" height="16" rx="2" stroke="#00f2ff" stroke-width="2.5"/>
+                        <circle cx="12" cy="10" r="1.5" fill="#00f2ff"/>
+                        <!-- Flecha de rotación -->
+                        <path d="M14 6 A8 8 0 0 1 6 14" stroke="#ff00ff" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                        <path d="M6 14 L5 16 L7 15" stroke="#ff00ff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <h2 id="orientation-title" class="orientation-lock__title">Gira tu dispositivo</h2>
+                <p class="orientation-lock__text">Este juego requiere modo horizontal</p>
+            </div>
+        </div>
+
+        <!-- ===== SECCIÓN DE NAVEGACIÓN (MENÚS / PAUSA / GAME OVER) ===== -->
+        <div id="touch-nav-overlay" class="touch-nav-overlay" aria-label="Controles de navegación táctil">
+            <!-- D-Pad Direccional (Izquierda) -->
+            <div class="touch-nav-dpad" role="group" aria-label="Dirección">
+                <button type="button" id="nav-btn-up" class="touch-nav-btn touch-nav-btn--up" aria-label="Arriba">
+                    <svg viewBox="0 0 64 64" aria-hidden="true">
+                        <polygon points="32,14 54,50 10,50" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+                    </svg>
+                </button>
+                <button type="button" id="nav-btn-left" class="touch-nav-btn touch-nav-btn--left" aria-label="Izquierda">
+                    <svg viewBox="0 0 64 64" aria-hidden="true">
+                        <polygon points="14,32 50,10 50,54" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+                    </svg>
+                </button>
+                <div class="touch-nav-dpad__center" aria-hidden="true"></div>
+                <button type="button" id="nav-btn-right" class="touch-nav-btn touch-nav-btn--right" aria-label="Derecha">
+                    <svg viewBox="0 0 64 64" aria-hidden="true">
+                        <polygon points="50,32 14,10 14,54" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+                    </svg>
+                </button>
+                <button type="button" id="nav-btn-down" class="touch-nav-btn touch-nav-btn--down" aria-label="Abajo">
+                    <svg viewBox="0 0 64 64" aria-hidden="true">
+                        <polygon points="32,50 54,14 10,14" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Botones de Acción (Derecha): Confirmar y Volver (sin texto, solo iconos) -->
+            <div class="touch-nav-actions" role="group" aria-label="Acciones">
+                <button type="button" id="nav-btn-back" class="touch-nav-btn touch-nav-btn--action touch-nav-btn--back" aria-label="Volver">
+                    <!-- Icono X (cerrar/volver) -->
+                    <svg viewBox="0 0 64 64" aria-hidden="true">
+                        <line x1="18" y1="18" x2="46" y2="46" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+                        <line x1="46" y1="18" x2="18" y2="46" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+                    </svg>
+                </button>
+                <button type="button" id="nav-btn-ok" class="touch-nav-btn touch-nav-btn--action touch-nav-btn--ok" aria-label="Confirmar">
+                    <!-- Icono ▶ (play/confirmar) -->
+                    <svg viewBox="0 0 64 64" aria-hidden="true">
+                        <polygon points="22,12 52,32 22,52" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- ===== CONTROLES TÁCTILES EN-GAME (2 jugadores) ===== -->
+        <div id="touch-zone-left" class="touch-zone touch-zone--left" aria-label="Controles jugador 1">
+            <button type="button" id="game-btn-p1-up" class="touch-arrow-btn touch-arrow-btn--up" aria-label="Jugador 1 Arriba">
+                <svg viewBox="0 0 64 64" aria-hidden="true">
+                    <polygon points="32,14 54,50 10,50" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+                </svg>
+            </button>
+            <button type="button" id="game-btn-p1-down" class="touch-arrow-btn touch-arrow-btn--down" aria-label="Jugador 1 Abajo">
+                <svg viewBox="0 0 64 64" aria-hidden="true">
+                    <polygon points="32,50 54,14 10,14" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+
+        <div id="touch-zone-right" class="touch-zone touch-zone--right" aria-label="Controles jugador 2">
+            <button type="button" id="game-btn-p2-up" class="touch-arrow-btn touch-arrow-btn--up" aria-label="Jugador 2 Arriba">
+                <svg viewBox="0 0 64 64" aria-hidden="true">
+                    <polygon points="32,14 54,50 10,50" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+                </svg>
+            </button>
+            <button type="button" id="game-btn-p2-down" class="touch-arrow-btn touch-arrow-btn--down" aria-label="Jugador 2 Abajo">
+                <svg viewBox="0 0 64 64" aria-hidden="true">
+                    <polygon points="32,50 54,14 10,14" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- ===== BOTÓN DE PAUSA FLOTANTE (móvil) ===== -->
+        <button id="pause-btn-mobile" class="pause-btn-mobile" type="button" aria-label="Pausar juego">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="9" y1="5" x2="9" y2="19"/>
+                <line x1="15" y1="5" x2="15" y2="19"/>
+            </svg>
+        </button>
     </div>
 
     <div id="mobile-warning" class="mobile-warning" hidden>

@@ -3,6 +3,7 @@ import { playMusic, playSfx } from '../audio/sound';
 import { AI_CONFIG, COLORS, DIFFICULTIES, RETRO_FONT } from '../config/gameplay';
 import type { Difficulty, GameMode, GameResult, GameSettings } from '../types';
 import { bindFullscreenKey, colorToHex, drawNeonGrid } from '../ui/neon';
+import { hideNavigationControls, showNavigationControls } from '../ui/touch-controls';
 
 interface GameOverMenuItem
 {
@@ -119,6 +120,20 @@ export class GameOver extends Scene
         this.createActions();
         this.refreshSelection();
         this.bindKeys();
+
+        // Controles de navegación táctil en GameOver (móvil y tablet)
+        showNavigationControls({
+            onNavigate: (dir) => {
+                if (dir === 'up') this.navigate(-1);
+                else if (dir === 'down') this.navigate(1);
+            },
+            onSelect: () => this.confirmSelection(),
+            onBack: () => this.goToMenu()
+        });
+
+        this.events.once('shutdown', () => {
+            hideNavigationControls();
+        });
 
         this.add.text(400, 572, 'UP/DOWN OR W/S: SELECT   ENTER: CONFIRM   ESC: MENU   F: FULLSCREEN', {
             fontFamily: RETRO_FONT,
@@ -253,6 +268,7 @@ export class GameOver extends Scene
         }
 
         this.starting = true;
+        hideNavigationControls();
         this.cameras.main.fadeOut(180, 0, 0, 0);
 
         this.time.delayedCall(190, action);
